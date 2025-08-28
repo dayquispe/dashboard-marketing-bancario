@@ -38,7 +38,7 @@ with aba1:
         st.dataframe(dados.head())
 
     with sub2:
-        if 'df' in locals():
+        if 'dados' in locals():
             st.subheader("🔎 Identificação dos Tipos de Variáveis")
 
             st.markdown("### 📑 Dicionário de Variáveis")
