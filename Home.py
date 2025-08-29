@@ -24,6 +24,7 @@ with abas[0]:
         st.image("minha-img-dashboard.jpg", width=180)  # coloque sua foto ou link da imagem
     with col2:
         st.title("Olá, eu sou Dayana Ticona Quispe 👋")
+        st.subheader("Estudante de Engenharia de Software")
         st.subheader("Objetivo Profissional")
         st.write("Tenho grande interesse em **Análise de Dados**, área na qual gostaria muito de "
          "trabalhar e me desenvolver. No futuro, também pretendo atuar com **Machine Learning** "
@@ -149,4 +150,5 @@ with abas[2]:
     - **Pontos fortes**: Trabalho em equipe, pontualidade, organização e responsabilidade.  
     - **Área técnica**: Boa base em lógica de programação, Python e SQL, com noções de Java e JavaScript.  
     - **Ferramentas**: Conhecimento em Microsoft Office para apoio em documentação e relatórios.
+
     """)
