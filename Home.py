@@ -23,7 +23,7 @@ with abas[0]:
     with col1:
         st.image("minha-img-dashboard.jpg", width=180)  # coloque sua foto ou link da imagem
     with col2:
-        st.title("Olá,eu sou a Dayana Ticona Quispe 👋")
+        st.title("Olá, eu sou a Dayana Ticona Quispe 👋")
         st.subheader("Estudante de Engenharia de Software")
         st.subheader("Objetivo Profissional")
         st.write("Tenho grande interesse em **Análise de Dados**, área na qual gostaria muito de "
@@ -152,4 +152,5 @@ with abas[2]:
     - **Ferramentas**: Conhecimento em Microsoft Office para apoio em documentação e relatórios.
 
     """)
+
 
