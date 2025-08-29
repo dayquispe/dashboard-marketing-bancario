@@ -1,9 +1,10 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
 from scipy import stats
+from statsmodels.stats.proportion import proportion_confint, proportions_ztest
+import plotly.express as px
+import plotly.graph_objects as go
 
 # Título principal da página
 st.title("📊 Análise de Dados")
