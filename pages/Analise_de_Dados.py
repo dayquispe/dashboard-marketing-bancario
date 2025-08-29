@@ -322,66 +322,214 @@ with aba3:
     # =====================
     st.title("📈 Intervalos de Confiança e Testes de Hipótese")
 
-    # --- Escolha do parâmetro ---
-    st.subheader("🔎 Parâmetro escolhido: Idade dos clientes")
-    st.markdown("""
-    A variável **idade** foi escolhida porque é numérica contínua, 
-    o que permite calcular Intervalo de Confiança da média e aplicar Teste de Hipótese.
-    """)
+    st.caption("Aplicação prática com o conjunto de dados de marketing bancário.")
 
-    # --- Estatísticas ---
-    media = dados["idade"].mean()
-    desvio = dados["idade"].std()
-    n = len(dados["idade"])
-    alpha = 0.05
-
-    # Intervalo de confiança (95%)
-    ic = stats.t.interval(0.95, df=n-1, loc=media, scale=desvio/(n**0.5))
-
-    # Teste de hipótese (t-test contra 40 anos)
-    t_stat, p_val = stats.ttest_1samp(dados["idade"], 40)
-
-    # =====================
-    # Visualizações
-    # =====================
-    fig, ax = plt.subplots(figsize=(8,5))
-    sns.histplot(dados["idade"], bins=30, kde=True, color="skyblue", ax=ax)
-    ax.axvline(media, color="red", linestyle="--", label=f"Média {media:.2f}")
-    ax.axvline(ic[0], color="green", linestyle=":", label=f"IC 95% = [{ic[0]:.2f}, {ic[1]:.2f}]")
-    ax.axvline(ic[1], color="green", linestyle=":")
-    ax.legend()
-    ax.set_title("Distribuição da Idade com Intervalo de Confiança")
-    st.pyplot(fig)
-
-    # =====================
-    # Resultados
-    # =====================
-    st.subheader("📊 Resultados Estatísticos")
-
-    st.markdown(f"""
-    - **Média amostral:** {media:.2f} anos  
-    - **Desvio padrão:** {desvio:.2f}  
-    - **Intervalo de confiança (95%):** {ic[0]:.2f} a {ic[1]:.2f} anos  
-    - **Hipótese nula (H₀):** μ = 40 anos  
-    - **Hipótese alternativa (H₁):** μ ≠ 40 anos  
-    - **Estatística t:** {t_stat:.2f}  
-    - **p-valor:** {p_val:.4f}  
-    """)
-
-    # =====================
-    # Interpretação
-    # =====================
-    st.subheader("📝 Interpretação")
-
-    if p_val < alpha:
-        st.markdown(f"""
-        ✅ Como **p-valor = {p_val:.4f} < 0.05**, rejeitamos H₀.  
-        Isso significa que a **idade média dos clientes é estatisticamente diferente de 40 anos**.  
-        O IC 95% [{ic[0]:.2f}, {ic[1]:.2f}] confirma que a média populacional não inclui o valor 40.
+    # --------------------------
+    # Preparação do alvo binário
+    # --------------------------
+    def detect_target(dados):
+        candidates = ["y", "deposit", "subscribed", "target", "response"]
+        for c in candidates:
+            if c in dados.columns:
+                if dados[c].dropna().nunique() == 2:
+                    return c
+        for c in dados.columns:
+            if dados[c].dropna().nunique() == 2:
+                return c
+        return None
+    
+    target_col = detect_target(dados)
+    if target_col is None:
+        st.error("Não encontrei uma coluna binária de resposta (ex.: 'y', 'deposit'). Verifique o dataset.")
+        st.stop()
+    
+    dados[target_col] = dados[target_col].astype(str).str.lower().str.strip()
+    positives = ["yes", "sim", "1", "true", "t", "y"]
+    dados["_target_"] = dados[target_col].apply(lambda x: 1 if x in positives or x=="1" else 0)
+    st.info(f"Coluna alvo detectada: **{target_col}** (convertida para 0/1 em `_target_`).")
+    
+    # colunas categóricas e numéricas
+    cat_cols = [c for c in dados.columns if dados[c].dtype == "object" and c not in [target_col]]
+    num_cols = [c for c in dados.columns if np.issubdtype(dados[c].dtype, np.number) and c != "_target_"]
+    
+    # --------------------------
+    # Escolha do parâmetro
+    # --------------------------
+    st.subheader("Escolha do parâmetro para analisar")
+    mode = st.radio(
+        "Parâmetro principal:",
+        ["Taxa de conversão (proporção)", "Média de variável numérica"],
+        horizontal=True
+    )
+    
+    # --------------------------
+    # BLOCO A — PROPORÇÕES
+    # --------------------------
+    if mode == "Taxa de conversão (proporção)":
+        st.markdown("""
+        **Justificativa**:  
+        Como a resposta é binária (contratou depósito: *sim/não*), o parâmetro natural é a **proporção de conversão**.  
+        Para estimá-la, usamos **Intervalo de Confiança (IC) para proporção** (método de Wilson a 95%).  
+        Para comparar grupos (ex.: *houve contato prévio?*), usamos **teste Z para duas proporções**, adequado para amostras grandes e resposta binária.
         """)
+    
+        # Visão geral — proporção global
+        conv_rate = dados["_target_"].mean()
+        n = dados["_target_"].count()
+        ci_low, ci_high = proportion_confint(count=dados["_target_"].sum(), nobs=n, alpha=0.05, method="wilson")
+    
+        st.markdown("### Proporção global de conversão")
+        kpi1, kpi2, kpi3 = st.columns(3)
+        kpi1.metric("Taxa de conversão", f"{100*conv_rate:.2f}%")
+        kpi2.metric("IC 95% (Wilson) — limite inferior", f"{100*ci_low:.2f}%")
+        kpi3.metric("IC 95% (Wilson) — limite superior", f"{100*ci_high:.2f}%")
+    
+        fig_g = go.Figure()
+        fig_g.add_trace(go.Bar(x=["Conversão"], y=[100*conv_rate], name="Taxa (%)"))
+        fig_g.add_shape(type="line", x0=-0.5, x1=0.5, y0=100*ci_low, y1=100*ci_low)
+        fig_g.add_shape(type="line", x0=-0.5, x1=0.5, y0=100*ci_high, y1=100*ci_high)
+        fig_g.update_layout(yaxis_title="%", title="Taxa global de conversão com IC95% (linhas)")
+        st.plotly_chart(fig_g, use_container_width=True)
+    
+        st.divider()
+        st.markdown("### Comparação de grupos (duas proporções)")
+    
+        small_cats = [c for c in cat_cols if dados[c].nunique()<=8]
+        if not small_cats:
+            st.warning("Não há colunas categóricas com até 8 categorias para comparar.")
+        else:
+            grp_col = st.selectbox("Escolha uma variável categórica para comparar", small_cats, index=0)
+            sub = dados[[grp_col, "_target_"]].dropna().copy()
+            order = sub[grp_col].value_counts().index.tolist()
+            bars, ci_l, ci_u = [], [], []
+            for lvl in order:
+                s = sub.loc[sub[grp_col]==lvl, "_target_"]
+                p = s.mean()
+                low, high = proportion_confint(s.sum(), s.count(), alpha=0.05, method="wilson")
+                bars.append(100*p); ci_l.append(100*low); ci_u.append(100*high)
+    
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=order, y=bars, name="Taxa de conversão (%)"))
+            fig.update_traces(error_y=dict(type="data", array=np.array(ci_u)-np.array(bars),
+                                           arrayminus=np.array(bars)-np.array(ci_l)))
+            fig.update_layout(title=f"Taxa de conversão por {grp_col} (IC95% Wilson)", yaxis_title="%")
+            st.plotly_chart(fig, use_container_width=True)
+    
+            lvls = order[:]
+            if len(lvls) >= 2:
+                st.markdown("#### Teste Z para duas proporções")
+                c1, c2 = st.columns(2)
+                with c1:
+                    a = st.selectbox("Grupo A", lvls, index=0)
+                with c2:
+                    b = st.selectbox("Grupo B", lvls, index=1)
+    
+                sA = sub.loc[sub[grp_col]==a, "_target_"]
+                sB = sub.loc[sub[grp_col]==b, "_target_"]
+                count = np.array([sA.sum(), sB.sum()])
+                nobs  = np.array([sA.count(), sB.count()])
+                zstat, pval = proportions_ztest(count, nobs, alternative="two-sided")
+                pA, pB = sA.mean(), sB.mean()
+                se = np.sqrt(pA*(1-pA)/nobs[0] + pB*(1-pB)/nobs[1])
+                diff = pA - pB
+                ci_d = (diff - 1.96*se, diff + 1.96*se)
+    
+                st.write(f"**H0**: p₍{a}₎ = p₍{b}₎  •  **H1**: p₍{a}₎ ≠ p₍{b}₎")
+                st.write(f"Estatística Z = {zstat:.3f}  •  p-valor = {pval:.4g}")
+                st.write(f"IC95% para (p₍{a}₎ − p₍{b}₎): {100*ci_d[0]:.2f}% a {100*ci_d[1]:.2f}%")
+    
+                alpha = 0.05
+                if pval < alpha:
+                    concl = f"Rejeitamos H0: a taxa de conversão difere entre **{a}** e **{b}** (p = {pval:.4g})."
+                else:
+                    concl = f"Não rejeitamos H0: não há evidência de diferença de conversão entre **{a}** e **{b}** (p = {pval:.4g})."
+                st.success(concl)
+    
+            st.markdown("#### Teste de independência (Qui-quadrado)")
+            tab = pd.crosstab(sub[grp_col], sub["_target_"])
+            chi2, p_chi, dof, _ = stats.chi2_contingency(tab)
+            st.write(f"**H0**: {grp_col} e conversão são independentes.")
+            st.write(f"Qui² = {chi2:.3f}  •  gl = {dof}  •  p-valor = {p_chi:.4g}")
+            if p_chi < 0.05:
+                st.info(f"Rejeitamos H0: evidência de associação entre **{grp_col}** e conversão.")
+            else:
+                st.info(f"Não rejeitamos H0: sem evidência de associação entre **{grp_col}** e conversão.")
+    
+    # --------------------------
+    # BLOCO B — MÉDIAS
+    # --------------------------
     else:
-        st.markdown(f"""
-        ❌ Como **p-valor = {p_val:.4f} ≥ 0.05**, não rejeitamos H₀.  
-        Isso significa que **não há evidência suficiente** para afirmar que a idade média difere de 40 anos.  
-        O IC 95% [{ic[0]:.2f}, {ic[1]:.2f}] contém o valor 40.
+        st.markdown("""
+        **Justificativa**:  
+        Para avaliar se clientes que **contrataram** vs **não contrataram** diferem em alguma **métrica contínua** (ex.: idade, saldo, duração da chamada), estimamos:
+        - **IC 95% para a média** (assumindo amostra grande; pelo TCL o IC *t* é apropriado).  
+        - **Teste t de Welch** para diferença de médias entre os grupos (não assume variâncias iguais).
         """)
+    
+        if not num_cols:
+            st.warning("Não encontrei colunas numéricas para analisar.")
+            st.stop()
+    
+        num_col = st.selectbox("Escolha a variável numérica", num_cols, index=0)
+    
+        sub = dados[[num_col, "_target_"]].dropna().copy()
+        sub["grupo"] = np.where(sub["_target_"]==1, "Assinou", "Não assinou")
+    
+        def ci_mean(series, alpha=0.05):
+            s = series.dropna()
+            m = s.mean()
+            se = stats.sem(s, nan_policy="omit")
+            tcrit = stats.t.ppf(1 - alpha/2, df=len(s)-1)
+            return m, (m - tcrit*se, m + tcrit*se)
+    
+        stats_g = sub.groupby("grupo")[num_col].apply(lambda s: pd.Series(ci_mean(s))).reset_index()
+        stats_g[[num_col, "IC"]] = pd.DataFrame(stats_g[0].tolist(), index=stats_g.index)
+        stats_g[["IC_low", "IC_high"]] = pd.DataFrame(stats_g["IC"].tolist(), index=stats_g.index)
+        stats_g = stats_g[["grupo", num_col, "IC_low", "IC_high"]].rename(columns={num_col:"media"})
+    
+        cA, cB = st.columns(2)
+        with cA:
+            st.dataframe(stats_g, use_container_width=True)
+        with cB:
+            figm = go.Figure()
+            figm.add_trace(go.Bar(x=stats_g["grupo"], y=stats_g["media"], name="Média"))
+            figm.update_traces(error_y=dict(type="data",
+                                            array=stats_g["IC_high"]-stats_g["media"],
+                                            arrayminus=stats_g["media"]-stats_g["IC_low"]))
+            figm.update_layout(title=f"Média de {num_col} por grupo (IC95%)", yaxis_title=num_col)
+            st.plotly_chart(figm, use_container_width=True)
+    
+        x = sub.loc[sub["grupo"]=="Assinou", num_col]
+        y = sub.loc[sub["grupo"]=="Não assinou", num_col]
+        tstat, pval = stats.ttest_ind(x, y, equal_var=False, nan_policy="omit")
+    
+        nx, ny = x.count(), y.count()
+        vx, vy = x.var(ddof=1), y.var(ddof=1)
+        diff = x.mean() - y.mean()
+        se = np.sqrt(vx/nx + vy/ny)
+        df_w = (vx/nx + vy/ny)**2 / ((vx**2)/((nx**2)*(nx-1)) + (vy**2)/((ny**2)*(ny-1)))
+        tcrit = stats.t.ppf(0.975, df=df_w)
+        ci_diff = (diff - tcrit*se, diff + tcrit*se)
+    
+        st.markdown("#### Teste t de Welch — diferença de médias entre grupos")
+        st.write(f"**H0**: μ(Assinou) = μ(Não assinou)  •  **H1**: μ(Assinou) ≠ μ(Não assinou)")
+        st.write(f"t = {tstat:.3f}  •  gl ≈ {df_w:.1f}  •  p-valor = {pval:.4g}")
+        st.write(f"IC95% para diferença de médias (Assinou − Não assinou): {ci_diff[0]:.3g} a {ci_diff[1]:.3g}")
+    
+        if pval < 0.05:
+            st.success(f"Rejeitamos H0: a média de **{num_col}** difere entre quem assinou e quem não assinou (p = {pval:.4g}).")
+        else:
+            st.info(f"Não rejeitamos H0: não há evidência de diferença em **{num_col}** entre os grupos (p = {pval:.4g}).")
+    
+    # --------------------------
+    # Observações finais (metodologia)
+    # --------------------------
+    with st.expander("Notas metodológicas (para o relatório)"):
+        st.markdown("""
+        - **IC de proporção (Wilson 95%)**: preferido ao Wald tradicional por ter melhor cobertura, especialmente quando p está longe de 0.5 ou amostras moderadas.
+        - **Teste Z para duas proporções**: resposta binária, amostras independentes; usa aproximação normal (amostras grandes).
+        - **Qui-quadrado de independência**: avalia associação entre a variável categórica e a conversão (tabela de contingência).
+        - **IC da média e teste t de Welch**: apropriados para comparar médias com possíveis variâncias diferentes e amostras desbalanceadas.
+        - Assumimos **independência entre observações** e que não há forte viés de seleção além do observado.
+        """)
+        
